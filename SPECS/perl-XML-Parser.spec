@@ -1,11 +1,17 @@
 Name:           perl-XML-Parser
 Version:        2.47
-Release:        6%{?dist}
+Release:        6.1%{?dist}
 Summary:        Perl module for parsing XML documents
 
 License:        Artistic-2.0
 Url:            https://metacpan.org/release/XML-Parser
 Source0:        https://cpan.metacpan.org/authors/id/T/TO/TODDR/XML-Parser-%{version}.tar.gz
+# Fix buffer overflow in parse_stream when filehandle has :utf8
+# CVE-2006-10002
+Patch0:         XML-Parser-2.48-CVE-2006-10002.patch
+# Fix off-by-one heap buffer overflow in st_serial_stack growth check
+# CVE-2006-10003
+Patch1:         XML-Parser-2.48-CVE-2006-10003.patch
 
 # Build
 BuildRequires:  coreutils
@@ -37,6 +43,7 @@ BuildRequires:  perl(URI)
 BuildRequires:  perl(URI::file)
 BuildRequires:  perl(XSLoader)
 # Tests
+BuildRequires:  perl(File::Temp)
 BuildRequires:  perl(if)
 BuildRequires:  perl(Test)
 BuildRequires:  perl(Test::More)
@@ -72,6 +79,8 @@ with "%{_libexecdir}/%{name}/test".
 
 %prep
 %setup -q -n XML-Parser-%{version} 
+%patch -P0 -p1
+%patch -P1 -p1
 chmod 644 samples/{canonical,xml*}
 perl -MConfig -pi -e 's|^#!/usr/local/bin/perl\b|$Config{startperl}|' samples/{canonical,xml*}
 
@@ -132,6 +141,9 @@ make test
 %{_libexecdir}/%{name}
 
 %changelog
+* Fri Mar 27 2026 Jitka Plesnikova <jplesnik@redhat.com> - 2.47-6.1
+- Fix CVE-2006-10002, CVE-2006-10003
+
 * Tue Oct 29 2024 Troy Dawson <tdawson@redhat.com> - 2.47-6
 - Bump release for October 2024 mass rebuild:
   Resolves: RHEL-64018
