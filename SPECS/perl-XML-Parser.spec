@@ -1,11 +1,17 @@
 Name:           perl-XML-Parser
 Version:        2.46
-Release:        9%{?dist}
+Release:        9.1%{?dist}
 Summary:        Perl module for parsing XML documents
 
 License:        GPL+ or Artistic
 Url:            https://metacpan.org/release/XML-Parser
 Source0:        https://cpan.metacpan.org/authors/id/T/TO/TODDR/XML-Parser-%{version}.tar.gz
+# Fix buffer overflow in parse_stream when filehandle has :utf8
+# CVE-2006-10002
+Patch0:         XML-Parser-2.48-CVE-2006-10002.patch
+# Fix off-by-one heap buffer overflow in st_serial_stack growth check
+# CVE-2006-10003
+Patch1:         XML-Parser-2.48-CVE-2006-10003.patch
 
 # Build
 BuildRequires:  coreutils
@@ -37,6 +43,7 @@ BuildRequires:  perl(URI)
 BuildRequires:  perl(URI::file)
 BuildRequires:  perl(XSLoader)
 # Tests
+BuildRequires:  perl(File::Temp)
 BuildRequires:  perl(if)
 BuildRequires:  perl(Test)
 BuildRequires:  perl(Test::More)
@@ -60,14 +67,31 @@ parse call. They can also be given as extra arguments to the parse
 methods, in which case they override options given at XML::Parser
 creation time.
 
+%package tests
+Summary:        Tests for %{name}
+Requires:       %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
+Requires:       perl-Test-Harness
+
+%description tests
+Tests from %{name}. Execute them
+with "%{_libexecdir}/%{name}/test".
+
 %prep
 %setup -q -n XML-Parser-%{version} 
+%patch -P0 -p1
+%patch -P1 -p1
 chmod 644 samples/{canonical,xml*}
 perl -MConfig -pi -e 's|^#!/usr/local/bin/perl\b|$Config{startperl}|' samples/{canonical,xml*}
 
 # Remove bundled library
 rm -r inc
 perl -i -ne 'print $_ unless m{^inc/}' MANIFEST
+
+# Help generators to recognize Perl scripts
+for F in t/*.t; do
+    perl -i -MConfig -ple 'print $Config{startperl} if $. == 1 && !s{\A#!.*perl\b}{$Config{startperl}}' "$F"
+    chmod +x "$F"
+done
 
 %build
 perl Makefile.PL INSTALLDIRS=vendor NO_PACKLIST=1 NO_PERLLOCAL=1 OPTIMIZE="$RPM_OPT_FLAGS"
@@ -84,17 +108,40 @@ for file in samples/REC-xml-19980210.xml; do
   perl -i -pe "s/encoding='ISO-8859-1'/encoding='UTF-8'/" "$file"
 done
 
+# Install tests
+mkdir -p %{buildroot}%{_libexecdir}/%{name}
+cp -a t samples %{buildroot}%{_libexecdir}/%{name}
+cat > %{buildroot}%{_libexecdir}/%{name}/test << 'EOF'
+#!/bin/bash
+set -e
+# Some tests write into temporary files/directories. The easiest solution
+# is to copy the tests into a writable directory and execute them from there.
+DIR=$(mktemp -d)
+pushd "$DIR"
+cp -a %{_libexecdir}/%{name}/* ./
+prove -I . -j "$(getconf _NPROCESSORS_ONLN)"
+popd
+rm -rf "$DIR"
+EOF
+chmod +x %{buildroot}%{_libexecdir}/%{name}/test
+
 %check
+export HARNESS_OPTIONS=j$(perl -e 'if ($ARGV[0] =~ /.*-j([0-9][0-9]*).*/) {print $1} else {print 1}' -- '%{?_smp_mflags}')
 make test
 
 %files
 %doc README Changes samples/
 %{perl_vendorarch}/XML/
 %{perl_vendorarch}/auto/XML/
-%{_mandir}/man3/*.3*
+%{_mandir}/man3/XML::Parser*.3*
 
+%files tests
+%{_libexecdir}/%{name}
 
 %changelog
+* Thu Mar 26 2026 Jitka Plesnikova <jplesnik@redhat.com> - 2.46-9.1
+- Fix CVE-2006-10002, CVE-2006-10003
+
 * Mon Aug 09 2021 Mohan Boddu <mboddu@redhat.com> - 2.46-9
 - Rebuilt for IMA sigs, glibc 2.34, aarch64 flags
   Related: rhbz#1991688
