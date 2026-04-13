@@ -1,6 +1,6 @@
 Name:           perl-XML-Parser
 Version:        2.44
-Release:        11%{?dist}
+Release:        12%{?dist}
 Summary:        Perl module for parsing XML documents
 
 Group:          Development/Libraries
@@ -10,18 +10,29 @@ Source0:        http://search.cpan.org/CPAN/authors/id/T/TO/TODDR/XML-Parser-%{v
 # Fix a buffer overwrite in parse_stream() with wide characters on the standard
 # input, bug #1658512, CPAN RT#128006
 Patch0:         XML-Parser-2.44_01-Fix-a-buffer-overwrite-in-parse_stream.patch
+# Fix buffer overflow in parse_stream when filehandle has :utf8
+# CVE-2006-10002
+Patch1:         XML-Parser-2.48-CVE-2006-10002.patch
+# Fix off-by-one heap buffer overflow in st_serial_stack growth check
+# CVE-2006-10003
+Patch2:         XML-Parser-2.48-CVE-2006-10003.patch
 
+BuildRequires:  make
 BuildRequires:  perl-devel
 BuildRequires:  perl-generators
+BuildRequires:  perl-interpreter
 BuildRequires:  perl(Carp)
 BuildRequires:  perl(Config)
 BuildRequires:  perl(Devel::CheckLib)
+BuildRequires:  perl(DynaLoader)
 BuildRequires:  perl(ExtUtils::MakeMaker)
 BuildRequires:  perl(FileHandle)
+BuildRequires:  perl(File::Temp)
 BuildRequires:  perl(if)
 BuildRequires:  perl(IO::File)
 BuildRequires:  perl(IO::Handle)
 BuildRequires:  perl(lib)
+BuildRequires:  perl(overload)
 BuildRequires:  perl(strict)
 BuildRequires:  perl(Test)
 BuildRequires:  perl(Test::More)
@@ -53,13 +64,15 @@ creation time.
 
 %prep
 %setup -q -n XML-Parser-%{version} 
-%patch0 -p1
+%patch -P0 -p1
+%patch -P1 -p1
+%patch -P2 -p1
 chmod 644 samples/{canonical,xml*}
 perl -pi -e 's|^#!/usr/local/bin/perl\b|#!%{__perl}|' samples/{canonical,xml*}
 
 # Remove bundled library
 rm -r inc
-sed -i -e '/^inc\// d' MANIFEST
+perl -i -ne 'print $_ unless m{^inc/}' MANIFEST
 
 %build
 CFLAGS="$RPM_OPT_FLAGS" perl Makefile.PL INSTALLDIRS=vendor
@@ -88,6 +101,9 @@ make test
 
 
 %changelog
+* Thu Mar 26 2026 Jitka Plesnikova <jplesnik@redhat.com> - 2.44-12
+- Fix CVE-2006-10002, CVE-2006-10003
+
 * Thu Dec 13 2018 Petr Pisar <ppisar@redhat.com> - 2.44-11
 - Fix a buffer overwrite in parse_stream() with wide characters on the standard
   input (bug #1658512)
